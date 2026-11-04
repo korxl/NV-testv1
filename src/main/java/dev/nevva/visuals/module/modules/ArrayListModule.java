@@ -1,4 +1,4 @@
-package dev.nevva.visuals.hud;
+package dev.nevva.visuals.module.modules;
 
 import dev.nevva.visuals.module.Category;
 import dev.nevva.visuals.module.Module;
