@@ -7,7 +7,8 @@ public enum Category {
 	HUD("HUD"),
 	RENDER("Render"),
 	WORLD("World"),
-	PLAYER("Player");
+	COMBAT("Combat"),
+	MISC("Misc");
 
 	private final String label;
 

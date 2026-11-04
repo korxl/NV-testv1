@@ -71,13 +71,20 @@ public final class TargetHud {
 
 		MinecraftClient client = MinecraftClient.getInstance();
 
-		if (client.player == null || client.options == null || client.options.hudHidden) {
+		if (client.player == null || client.options == null || client.options.hudHidden || mod.getModuleManager() == null) {
+			return;
+		}
+
+		TargetHudModule module = mod.getModuleManager().get(TargetHudModule.class);
+
+		if (module == null || !module.isEnabled()) {
 			return;
 		}
 
 		double t = appear.get();
+		double userScale = module.getScale().get() / 100.0;
 		int width = 152;
-		int height = 44;
+		int height = module.getHealthBar().get() ? 44 : 34;
 		int centerX = client.getWindow().getScaledWidth() / 2;
 		int y = client.getWindow().getScaledHeight() / 2 + 42;
 		int x = centerX - width / 2;
@@ -87,7 +94,7 @@ public final class TargetHud {
 		var matrices = context.getMatrices();
 		matrices.push();
 		matrices.translate(centerX, y + height / 2.0f, 0.0f);
-		float scale = (float) (0.88 + 0.12 * t);
+		float scale = (float) ((0.88 + 0.12 * t) * userScale);
 		matrices.scale(scale, scale, 1.0f);
 		matrices.translate(-centerX, -(y + height / 2.0f), 0.0f);
 
@@ -100,12 +107,16 @@ public final class TargetHud {
 		String healthText = String.format(Locale.ROOT, "%.1f", target.getHealth());
 		RenderUtils.text(context, renderer, healthText, x + width - 10 - renderer.getWidth(healthText), y + 7, RenderUtils.withAlpha(0xFF9BE38B, t));
 
-		float distance = client.player.distanceTo(target);
-		RenderUtils.text(context, renderer, String.format(Locale.ROOT, "%.1fm", distance), x + 10, y + 19, RenderUtils.withAlpha(0xFF8A93A6, t));
+		if (module.getDistance().get()) {
+			float distance = client.player.distanceTo(target);
+			RenderUtils.text(context, renderer, String.format(Locale.ROOT, "%.1fm", distance), x + 10, y + 19, RenderUtils.withAlpha(0xFF8A93A6, t));
+		}
 
-		int barY = y + 33;
-		RenderUtils.roundedRect(context, x + 10, barY, x + width - 10, barY + 4, 2, RenderUtils.withAlpha(0x40FFFFFF, t));
-		RenderUtils.roundedRect(context, x + 10, barY, x + 10 + (int) ((width - 20) * health), barY + 4, 2, RenderUtils.withAlpha(0xFF9BE38B, t));
+		if (module.getHealthBar().get()) {
+			int barY = y + 33;
+			RenderUtils.roundedRect(context, x + 10, barY, x + width - 10, barY + 4, 2, RenderUtils.withAlpha(0x40FFFFFF, t));
+			RenderUtils.roundedRect(context, x + 10, barY, x + 10 + (int) ((width - 20) * health), barY + 4, 2, RenderUtils.withAlpha(0xFF9BE38B, t));
+		}
 
 		matrices.pop();
 	}

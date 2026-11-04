@@ -21,6 +21,11 @@ public abstract class OptionModule<T> extends Module {
 
 	protected abstract T getOverrideValue(MinecraftClient client);
 
+	/** Option modules may veto the override (e.g. first person only). */
+	protected boolean shouldApply(MinecraftClient client) {
+		return true;
+	}
+
 	@Override
 	public void onTick(MinecraftClient client) {
 		if (client.options == null) {
@@ -30,6 +35,11 @@ public abstract class OptionModule<T> extends Module {
 		SimpleOption<T> option = getOption(client);
 
 		if (option == null) {
+			return;
+		}
+
+		if (!shouldApply(client)) {
+			restore(option);
 			return;
 		}
 
@@ -44,7 +54,13 @@ public abstract class OptionModule<T> extends Module {
 			if (!Objects.equals(option.getValue(), target)) {
 				option.setValue(target);
 			}
-		} else if (hasPrevious) {
+		} else {
+			restore(option);
+		}
+	}
+
+	private void restore(SimpleOption<T> option) {
+		if (hasPrevious) {
 			if (previous != null) {
 				option.setValue(previous);
 			}

@@ -6,6 +6,7 @@ import dev.nevva.visuals.module.modules.CustomFogModule;
 import net.minecraft.client.render.BackgroundRenderer;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.Fog;
+import net.minecraft.client.world.ClientWorld;
 
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,15 +20,9 @@ public class BackgroundRendererMixin {
 	private static void nevva$customFog(Camera camera, BackgroundRenderer.FogType fogType, Vector4f color,
 										float viewDistance, boolean thickenFog, float tickDelta,
 										CallbackInfoReturnable<Fog> cir) {
-		NevvaVisuals mod = NevvaVisuals.getInstance();
+		CustomFogModule module = resolve();
 
-		if (mod == null || mod.getModuleManager() == null) {
-			return;
-		}
-
-		CustomFogModule module = mod.getModuleManager().get(CustomFogModule.class);
-
-		if (module == null || !module.isEnabled()) {
+		if (module == null) {
 			return;
 		}
 
@@ -45,5 +40,41 @@ public class BackgroundRendererMixin {
 		}
 
 		cir.setReturnValue(new Fog(start, end, original.shape(), original.red(), original.green(), original.blue(), original.alpha()));
+	}
+
+	@Inject(method = "getFogColor", at = @At("RETURN"), cancellable = true)
+	private static void nevva$fogColor(Camera camera, float tickDelta, ClientWorld world, int clampedViewDistance,
+									   float skyDarkness, CallbackInfoReturnable<Vector4f> cir) {
+		CustomFogModule module = resolve();
+
+		if (module == null || !module.getTint().get()) {
+			return;
+		}
+
+		int color = module.getColor().getColor();
+		float red = ((color >> 16) & 0xFF) / 255.0f;
+		float green = ((color >> 8) & 0xFF) / 255.0f;
+		float blue = (color & 0xFF) / 255.0f;
+
+		Vector4f original = cir.getReturnValue();
+
+		if (original == null) {
+			cir.setReturnValue(new Vector4f(red, green, blue, 1.0f));
+			return;
+		}
+
+		cir.setReturnValue(new Vector4f(red, green, blue, original.w()));
+	}
+
+	private static CustomFogModule resolve() {
+		NevvaVisuals mod = NevvaVisuals.getInstance();
+
+		if (mod == null || mod.getModuleManager() == null) {
+			return null;
+		}
+
+		CustomFogModule module = mod.getModuleManager().get(CustomFogModule.class);
+
+		return module != null && module.isEnabled() ? module : null;
 	}
 }

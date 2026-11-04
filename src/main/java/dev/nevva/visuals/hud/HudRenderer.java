@@ -1,9 +1,7 @@
 package dev.nevva.visuals.hud;
 
 import dev.nevva.visuals.NevvaVisuals;
-import dev.nevva.visuals.module.Module;
 import dev.nevva.visuals.module.modules.HudModule;
-import dev.nevva.visuals.module.modules.WatermarkModule;
 import dev.nevva.visuals.render.RenderUtils;
 
 import net.minecraft.client.MinecraftClient;
@@ -17,11 +15,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * The configurable info overlay. No module list here: everything that is enabled
+ * is visible in the menu only.
+ */
 public final class HudRenderer {
 	private static final int LINE_HEIGHT = 10;
 	private static final int BACKGROUND = 0x8C0B0E14;
 	private static final int TEXT_COLOR = 0xFFE6EAF2;
-	private static final int ACCENT = 0xFF7C5CFF;
 	private static final int VALUE_COLOR = 0xFF35D6FF;
 
 	private final NevvaVisuals mod;
@@ -88,69 +89,83 @@ public final class HudRenderer {
 			return;
 		}
 
-		boolean background = mod.getConfigManager().getConfig().hudBackground;
 		TextRenderer textRenderer = client.textRenderer;
-		WatermarkModule watermark = mod.getModuleManager().get(WatermarkModule.class);
+		List<String[]> lines = buildLines(client, module);
 
+		if (lines.isEmpty()) {
+			return;
+		}
+
+		boolean background = module.getBackground().get();
+		int screenWidth = client.getWindow().getScaledWidth();
 		int x = 6;
-		int y = watermark != null && watermark.isEnabled() ? 20 : 6;
+		int y = mod.getModuleManager().get(dev.nevva.visuals.module.modules.WatermarkModule.class) != null
+				&& mod.getModuleManager().get(dev.nevva.visuals.module.modules.WatermarkModule.class).isEnabled()
+				? 20 : 6;
 
-		for (String[] line : buildLines(client)) {
-			int width = textRenderer.getWidth(line[0] + line[1]);
+		if (module.isRight()) {
+			x = screenWidth - 6 - width(textRenderer, lines);
+		}
+
+		for (String[] line : lines) {
+			int lineWidth = textRenderer.getWidth(line[0] + line[1]);
 
 			if (background) {
-				RenderUtils.roundedRect(context, x - 3, y - 1, x + width + 3, y + LINE_HEIGHT - 1, 3, BACKGROUND);
+				RenderUtils.roundedRect(context, x - 3, y - 1, x + lineWidth + 3, y + LINE_HEIGHT - 1, 3, BACKGROUND);
 			}
 
 			RenderUtils.text(context, textRenderer, line[0], x, y, TEXT_COLOR);
 			RenderUtils.text(context, textRenderer, line[1], x + textRenderer.getWidth(line[0]), y, VALUE_COLOR);
 			y += LINE_HEIGHT;
 		}
-
-		drawModuleList(context, client, textRenderer, background);
 	}
 
-	private List<String[]> buildLines(MinecraftClient client) {
+	private int width(TextRenderer renderer, List<String[]> lines) {
+		int max = 0;
+
+		for (String[] line : lines) {
+			max = Math.max(max, renderer.getWidth(line[0] + line[1]));
+		}
+
+		return max;
+	}
+
+	private List<String[]> buildLines(MinecraftClient client, HudModule module) {
 		List<String[]> lines = new ArrayList<>();
-		lines.add(new String[]{"FPS: ", String.valueOf(client.getCurrentFps())});
+
+		if (module.getFps().get()) {
+			lines.add(new String[]{"FPS: ", String.valueOf(client.getCurrentFps())});
+		}
 
 		BlockPos pos = client.player.getBlockPos();
-		lines.add(new String[]{"XYZ: ", pos.getX() + " " + pos.getY() + " " + pos.getZ()});
-		lines.add(new String[]{"Dir: ", client.player.getHorizontalFacing().asString()});
-		lines.add(new String[]{"Speed: ", String.format(Locale.ROOT, "%.1f", speed) + " b/s"});
+
+		if (module.getCoords().get()) {
+			lines.add(new String[]{"XYZ: ", pos.getX() + " " + pos.getY() + " " + pos.getZ()});
+		}
+
+		if (module.getDirection().get()) {
+			lines.add(new String[]{"Dir: ", client.player.getHorizontalFacing().asString()});
+		}
+
+		if (module.getSpeed().get()) {
+			lines.add(new String[]{"Speed: ", String.format(Locale.ROOT, "%.1f", speed) + " b/s"});
+		}
 
 		int ping = ping(client);
 
-		if (ping >= 0) {
+		if (module.getPing().get() && ping >= 0) {
 			lines.add(new String[]{"Ping: ", ping + " ms"});
 		}
 
-		lines.add(new String[]{"TPS: ", String.format(Locale.ROOT, "%.1f", tps())});
-		lines.add(new String[]{"RAM: ", usedMemory() + " MB"});
+		if (module.getTps().get()) {
+			lines.add(new String[]{"TPS: ", String.format(Locale.ROOT, "%.1f", tps())});
+		}
+
+		if (module.getMemory().get()) {
+			lines.add(new String[]{"RAM: ", usedMemory() + " MB"});
+		}
 
 		return lines;
-	}
-
-	private void drawModuleList(DrawContext context, MinecraftClient client, TextRenderer textRenderer, boolean background) {
-		int screenWidth = client.getWindow().getScaledWidth();
-		int y = 4;
-
-		for (Module module : mod.getModuleManager().getModules()) {
-			if (!module.isEnabled()) {
-				continue;
-			}
-
-			String name = module.getName();
-			int width = textRenderer.getWidth(name);
-			int x = screenWidth - width - 8;
-
-			if (background) {
-				RenderUtils.roundedRect(context, x - 4, y - 1, screenWidth - 3, y + LINE_HEIGHT - 1, 3, BACKGROUND);
-			}
-
-			RenderUtils.text(context, textRenderer, name, x, y, ACCENT);
-			y += LINE_HEIGHT;
-		}
 	}
 
 	private int ping(MinecraftClient client) {

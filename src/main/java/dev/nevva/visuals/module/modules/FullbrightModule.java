@@ -2,15 +2,20 @@ package dev.nevva.visuals.module.modules;
 
 import dev.nevva.visuals.module.Category;
 import dev.nevva.visuals.module.OptionModule;
+import dev.nevva.visuals.module.setting.NumberSetting;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.SimpleOption;
 
 public class FullbrightModule extends OptionModule<Double> {
-	private static final double BOOSTED_GAMMA = 10.0;
+	private final NumberSetting gamma = add(new NumberSetting("fullbright_gamma", "Gamma", 10.0, 1.0, 20.0, 0.5));
 
 	public FullbrightModule() {
 		super("Fullbright", "Lights up the world by boosting the brightness option", Category.RENDER);
+	}
+
+	public NumberSetting getGamma() {
+		return gamma;
 	}
 
 	@Override
@@ -20,6 +25,6 @@ public class FullbrightModule extends OptionModule<Double> {
 
 	@Override
 	protected Double getOverrideValue(MinecraftClient client) {
-		return BOOSTED_GAMMA;
+		return gamma.get();
 	}
 }

@@ -8,6 +8,5 @@ public class Config {
 	public Map<String, Boolean> bools = new LinkedHashMap<>();
 	public Map<String, Double> numbers = new LinkedHashMap<>();
 	public Map<String, String> choices = new LinkedHashMap<>();
-	public boolean hudBackground = true;
 	public boolean notifications = true;
 }

@@ -20,7 +20,7 @@ public class WorldMixin {
 	private void nevva$timeOfDay(CallbackInfoReturnable<Long> cir) {
 		CustomWorldModule module = nevva$resolve();
 
-		if (module == null) {
+		if (module == null || !module.getCustomTime().get()) {
 			return;
 		}
 
@@ -31,7 +31,7 @@ public class WorldMixin {
 	private void nevva$skyAngle(float tickDelta, CallbackInfoReturnable<Float> cir) {
 		CustomWorldModule module = nevva$resolve();
 
-		if (module == null) {
+		if (module == null || !module.getCustomTime().get()) {
 			return;
 		}
 

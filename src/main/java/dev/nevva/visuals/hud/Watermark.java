@@ -36,12 +36,18 @@ public final class Watermark {
 			return;
 		}
 
+		float scale = (float) (module.getScale().get() / 100.0);
 		TextRenderer renderer = client.textRenderer;
 		long time = System.currentTimeMillis();
-		int x = 6;
-		int y = 4;
 
-		RenderUtils.roundedRect(context, x - 3, y - 2, x + renderer.getWidth(TEXT) + 3, y + 10, 3, 0x660B0E14);
+		var matrices = context.getMatrices();
+		matrices.push();
+		matrices.translate(6.0f, 4.0f, 0.0f);
+		matrices.scale(scale, scale, 1.0f);
+
+		RenderUtils.roundedRect(context, -3, -2, renderer.getWidth(TEXT) + 3, 10, 3, 0x660B0E14);
+
+		int x = 0;
 
 		for (int i = 0; i < TEXT.length(); i++) {
 			double progress = TEXT.length() <= 1 ? 0.0 : (double) i / (TEXT.length() - 1);
@@ -49,8 +55,10 @@ public final class Watermark {
 			int color = RenderUtils.lerpColor(0xFF7C5CFF, 0xFF35D6FF, (progress * 0.7 + wave * 0.3) % 1.0);
 			String character = String.valueOf(TEXT.charAt(i));
 
-			RenderUtils.text(context, renderer, character, x, y, color);
+			RenderUtils.text(context, renderer, character, x, 0, color);
 			x += renderer.getWidth(character);
 		}
+
+		matrices.pop();
 	}
 }
