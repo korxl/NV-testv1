@@ -1,18 +1,15 @@
 package dev.nevva.visuals.module;
 
 import dev.nevva.visuals.config.Config;
-import dev.nevva.visuals.module.modules.AimAssistModule;
+import dev.nevva.visuals.module.modules.ArrayListModule;
 import dev.nevva.visuals.module.modules.AspectRatioModule;
-import dev.nevva.visuals.module.modules.AutoRespawnModule;
 import dev.nevva.visuals.module.modules.AutoSprintModule;
 import dev.nevva.visuals.module.modules.CustomFogModule;
 import dev.nevva.visuals.module.modules.CustomWorldModule;
-import dev.nevva.visuals.module.modules.DeathCoordsModule;
-import dev.nevva.visuals.module.modules.FastPlaceModule;
 import dev.nevva.visuals.module.modules.FullbrightModule;
 import dev.nevva.visuals.module.modules.HudModule;
+import dev.nevva.visuals.module.modules.InterfaceModule;
 import dev.nevva.visuals.module.modules.KeystrokesModule;
-import dev.nevva.visuals.module.modules.KillAuraModule;
 import dev.nevva.visuals.module.modules.NoDamageTiltModule;
 import dev.nevva.visuals.module.modules.NoDarknessModule;
 import dev.nevva.visuals.module.modules.NoNauseaModule;
@@ -41,6 +38,7 @@ public final class ModuleManager {
 		register(new TargetHudModule());
 		register(new KeystrokesModule());
 		register(new WatermarkModule());
+		register(new ArrayListModule());
 
 		register(new ZoomModule());
 		register(new FullbrightModule());
@@ -54,13 +52,8 @@ public final class ModuleManager {
 		register(new CustomFogModule());
 		register(new ParticlesModule());
 
-		register(new KillAuraModule());
-		register(new AimAssistModule());
-
+		register(new InterfaceModule());
 		register(new AutoSprintModule());
-		register(new FastPlaceModule());
-		register(new AutoRespawnModule());
-		register(new DeathCoordsModule());
 	}
 
 	public void register(Module module) {

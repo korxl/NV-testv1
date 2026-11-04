@@ -2,6 +2,9 @@ package dev.nevva.visuals;
 
 import dev.nevva.visuals.config.ConfigManager;
 import dev.nevva.visuals.gui.NevvaScreen;
+import dev.nevva.visuals.hud.ArrayListHud;
+import dev.nevva.visuals.hud.HudEditorScreen;
+import dev.nevva.visuals.hud.HudLayout;
 import dev.nevva.visuals.hud.HudRenderer;
 import dev.nevva.visuals.hud.Keystrokes;
 import dev.nevva.visuals.hud.Notifications;
@@ -10,6 +13,9 @@ import dev.nevva.visuals.hud.Watermark;
 import dev.nevva.visuals.module.Module;
 import dev.nevva.visuals.module.ModuleManager;
 import dev.nevva.visuals.module.modules.HudModule;
+import dev.nevva.visuals.module.modules.InterfaceModule;
+import dev.nevva.visuals.ui.Fonts;
+import dev.nevva.visuals.ui.Theme;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -29,8 +35,11 @@ public class NevvaVisuals implements ClientModInitializer {
 	private static NevvaVisuals instance;
 
 	private final ConfigManager configManager = new ConfigManager();
+	private final HudLayout hudLayout = new HudLayout();
+
 	private ModuleManager moduleManager;
 	private HudRenderer hudRenderer;
+	private ArrayListHud arrayListHud;
 	private TargetHud targetHud;
 	private Keystrokes keystrokes;
 	private Watermark watermark;
@@ -48,10 +57,13 @@ public class NevvaVisuals implements ClientModInitializer {
 		Keybinds.register();
 		configManager.load();
 
+		hudLayout.load(configManager.getConfig());
+
 		moduleManager = new ModuleManager();
 		moduleManager.applyConfig(configManager.getConfig());
 
 		hudRenderer = new HudRenderer(this);
+		arrayListHud = new ArrayListHud(this);
 		targetHud = new TargetHud(this);
 		keystrokes = new Keystrokes(this);
 		watermark = new Watermark(this);
@@ -84,6 +96,20 @@ public class NevvaVisuals implements ClientModInitializer {
 			}
 		}
 
+		if (Keybinds.HUD_EDITOR != null) {
+			while (Keybinds.HUD_EDITOR.wasPressed()) {
+				if (client.currentScreen == null) {
+					openHudEditor();
+				}
+			}
+		}
+
+		InterfaceModule ui = moduleManager.get(InterfaceModule.class);
+
+		if (ui != null) {
+			Fonts.set(ui.getFont().getValue());
+		}
+
 		moduleManager.onTick(client);
 		watermark.tick(client);
 		hudRenderer.tick(client);
@@ -99,11 +125,23 @@ public class NevvaVisuals implements ClientModInitializer {
 			return;
 		}
 
+		InterfaceModule ui = moduleManager.get(InterfaceModule.class);
+
+		if (ui != null) {
+			Fonts.set(ui.getFont().getValue());
+		}
+
 		watermark.render(context);
 		hudRenderer.render(context);
+		arrayListHud.render(context);
 		targetHud.render(context);
 		keystrokes.render(context);
 		notifications.render(context);
+	}
+
+	public void openHudEditor() {
+		MinecraftClient client = MinecraftClient.getInstance();
+		client.setScreen(new HudEditorScreen(this));
 	}
 
 	public void onModuleToggled(Module module, boolean enabled, boolean persist) {
@@ -113,7 +151,9 @@ public class NevvaVisuals implements ClientModInitializer {
 
 		saveConfig();
 
-		if (notifications != null && configManager.getConfig().notifications) {
+		InterfaceModule ui = moduleManager == null ? null : moduleManager.get(InterfaceModule.class);
+
+		if (notifications != null && (ui == null || ui.getNotifications().get())) {
 			notifications.push(module.getName(), enabled);
 		}
 	}
@@ -126,6 +166,7 @@ public class NevvaVisuals implements ClientModInitializer {
 		}
 
 		modules.writeTo(configManager.getConfig());
+		hudLayout.save(configManager.getConfig());
 		configManager.save();
 	}
 
@@ -137,7 +178,21 @@ public class NevvaVisuals implements ClientModInitializer {
 		return configManager;
 	}
 
+	public HudLayout getHudLayout() {
+		return hudLayout;
+	}
+
+	public HudRenderer getHudRenderer() {
+		return hudRenderer;
+	}
+
 	public Notifications getNotifications() {
 		return notifications;
+	}
+
+	public Theme getTheme() {
+		InterfaceModule ui = moduleManager == null ? null : moduleManager.get(InterfaceModule.class);
+
+		return ui == null ? Theme.of("Nursultan", 190.0f) : ui.resolveTheme();
 	}
 }

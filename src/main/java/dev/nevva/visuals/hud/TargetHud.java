@@ -4,6 +4,7 @@ import dev.nevva.visuals.NevvaVisuals;
 import dev.nevva.visuals.anim.Animation;
 import dev.nevva.visuals.module.modules.TargetHudModule;
 import dev.nevva.visuals.render.RenderUtils;
+import dev.nevva.visuals.ui.Theme;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -81,6 +82,7 @@ public final class TargetHud {
 			return;
 		}
 
+		Theme theme = mod.getTheme();
 		double t = appear.get();
 		double userScale = module.getScale().get() / 100.0;
 		int width = 152;
@@ -98,24 +100,27 @@ public final class TargetHud {
 		matrices.scale(scale, scale, 1.0f);
 		matrices.translate(-centerX, -(y + height / 2.0f), 0.0f);
 
-		RenderUtils.roundedRect(context, x, y, x + width, y + height, 7, RenderUtils.withAlpha(0xE60B0E14, t));
-		RenderUtils.roundedRect(context, x, y, x + 2, y + height, 2, RenderUtils.withAlpha(0xFF7C5CFF, t));
-		RenderUtils.outline(context, x, y, x + width, y + height, RenderUtils.withAlpha(0xFF232B38, t));
+		RenderUtils.roundedRect(context, x, y, x + width, y + height, 7, RenderUtils.scaled(theme.card, t));
+		RenderUtils.roundedRect(context, x, y, x + 2, y + height, 2, RenderUtils.withAlpha(theme.accent, t));
+		RenderUtils.outline(context, x, y, x + width, y + height, RenderUtils.scaled(theme.border, t));
 
-		RenderUtils.text(context, renderer, name, x + 10, y + 7, RenderUtils.withAlpha(0xFFE6EAF2, t));
+		RenderUtils.text(context, renderer, name, x + 10, y + 7, RenderUtils.withAlpha(theme.text, t));
 
 		String healthText = String.format(Locale.ROOT, "%.1f", target.getHealth());
-		RenderUtils.text(context, renderer, healthText, x + width - 10 - renderer.getWidth(healthText), y + 7, RenderUtils.withAlpha(0xFF9BE38B, t));
+		RenderUtils.text(context, renderer, healthText, x + width - 10 - RenderUtils.width(renderer, healthText), y + 7,
+				RenderUtils.withAlpha(theme.accent2, t));
 
 		if (module.getDistance().get()) {
 			float distance = client.player.distanceTo(target);
-			RenderUtils.text(context, renderer, String.format(Locale.ROOT, "%.1fm", distance), x + 10, y + 19, RenderUtils.withAlpha(0xFF8A93A6, t));
+			RenderUtils.textNoShadow(context, renderer, String.format(Locale.ROOT, "%.1fm", distance), x + 10, y + 19,
+					RenderUtils.withAlpha(theme.dim, t));
 		}
 
 		if (module.getHealthBar().get()) {
 			int barY = y + 33;
-			RenderUtils.roundedRect(context, x + 10, barY, x + width - 10, barY + 4, 2, RenderUtils.withAlpha(0x40FFFFFF, t));
-			RenderUtils.roundedRect(context, x + 10, barY, x + 10 + (int) ((width - 20) * health), barY + 4, 2, RenderUtils.withAlpha(0xFF9BE38B, t));
+			RenderUtils.roundedRect(context, x + 10, barY, x + width - 10, barY + 4, 2, RenderUtils.scaled(theme.track, t));
+			RenderUtils.horizontalGradient(context, x + 10, barY, x + 10 + (int) ((width - 20) * health), barY + 4,
+					RenderUtils.withAlpha(theme.accent, t), RenderUtils.withAlpha(theme.accent2, t));
 		}
 
 		matrices.pop();

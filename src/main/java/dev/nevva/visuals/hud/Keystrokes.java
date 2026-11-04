@@ -4,6 +4,7 @@ import dev.nevva.visuals.NevvaVisuals;
 import dev.nevva.visuals.anim.Animation;
 import dev.nevva.visuals.module.modules.KeystrokesModule;
 import dev.nevva.visuals.render.RenderUtils;
+import dev.nevva.visuals.ui.Theme;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -99,19 +100,15 @@ public final class Keystrokes {
 		int width = wide ? 28 : KEY_SIZE;
 		double active = animation(label).get();
 		TextRenderer renderer = client.textRenderer;
+		Theme theme = mod.getTheme();
 
-		RenderUtils.roundedRect(context, x, y, x + width, y + KEY_SIZE, 4, RenderUtils.lerpColor(0x8C0B0E14, 0xE67C5CFF, active));
-		RenderUtils.outline(context, x, y, x + width, y + KEY_SIZE, RenderUtils.lerpColor(0x66232B38, 0xFFB9A8FF, active));
-		RenderUtils.centeredText(context, renderer, label, x + width / 2, y + 4, RenderUtils.lerpColor(0xFFE6EAF2, 0xFFFFFFFF, active));
+		RenderUtils.roundedRect(context, x, y, x + width, y + KEY_SIZE, 4, RenderUtils.lerpColor(theme.card, theme.accent, active));
+		RenderUtils.outline(context, x, y, x + width, y + KEY_SIZE, RenderUtils.lerpColor(theme.border, theme.accent2, active));
+		RenderUtils.centeredText(context, renderer, label, x + width / 2, y + 4,
+				RenderUtils.lerpColor(theme.text, theme.background, active));
 	}
 
 	private void drawWide(DrawContext context, MinecraftClient client, String label, int x, int y) {
-		int width = 28;
-		double active = animation(label).get();
-		TextRenderer renderer = client.textRenderer;
-
-		RenderUtils.roundedRect(context, x, y, x + width, y + KEY_SIZE, 4, RenderUtils.lerpColor(0x8C0B0E14, 0xE67C5CFF, active));
-		RenderUtils.outline(context, x, y, x + width, y + KEY_SIZE, RenderUtils.lerpColor(0x66232B38, 0xFFB9A8FF, active));
-		RenderUtils.centeredText(context, renderer, label, x + width / 2, y + 4, RenderUtils.lerpColor(0xFFE6EAF2, 0xFFFFFFFF, active));
+		drawKey(context, client, label, x, y);
 	}
 }

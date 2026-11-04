@@ -2,7 +2,9 @@ package dev.nevva.visuals.hud;
 
 import dev.nevva.visuals.NevvaVisuals;
 import dev.nevva.visuals.anim.Animation;
+import dev.nevva.visuals.module.modules.InterfaceModule;
 import dev.nevva.visuals.render.RenderUtils;
+import dev.nevva.visuals.ui.Theme;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -12,11 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Slide-in notifications shown when a module is toggled.
+ * Slide-in notification cards with an icon dot and a lifetime progress bar.
  */
 public final class Notifications {
-	private static final long LIFETIME = 2200L;
+	private static final long LIFETIME = 2400L;
 	private static final int MAX_ENTRIES = 4;
+	private static final int WIDTH = 148;
 
 	private final NevvaVisuals mod;
 	private final List<Entry> entries = new ArrayList<>();
@@ -51,10 +54,16 @@ public final class Notifications {
 			return;
 		}
 
+		InterfaceModule ui = mod.getModuleManager() == null ? null : mod.getModuleManager().get(InterfaceModule.class);
+
+		if (ui != null && !ui.getNotifications().get()) {
+			return;
+		}
+
+		Theme theme = mod.getTheme();
 		TextRenderer renderer = client.textRenderer;
 		int screenWidth = client.getWindow().getScaledWidth();
-		int screenHeight = client.getWindow().getScaledHeight();
-		int y = screenHeight - 26;
+		int y = 6;
 
 		for (int i = entries.size() - 1; i >= 0; i--) {
 			Entry entry = entries.get(i);
@@ -64,18 +73,21 @@ public final class Notifications {
 				continue;
 			}
 
-			String state = entry.enabled ? "ON" : "OFF";
-			int width = 10 + renderer.getWidth(entry.text) + 8 + renderer.getWidth(state) + 10;
-			int x = screenWidth - (int) Math.round(width * alpha) - 6;
-			int alphaByte = (int) Math.round(235 * alpha);
+			String state = entry.enabled ? "ENABLED" : "DISABLED";
+			int x = screenWidth - (int) Math.round((WIDTH + 6) * alpha) - 6;
+			int textColor = RenderUtils.withAlpha(theme.text, alpha);
+			int stateColor = RenderUtils.withAlpha(entry.enabled ? theme.accent2 : theme.dim, alpha);
+			double life = 1.0 - Math.min(1.0, (System.currentTimeMillis() - entry.createdAt) / (double) LIFETIME);
 
-			RenderUtils.roundedRect(context, x, y, x + width, y + 16, 5, (alphaByte << 24) | 0x0B0E14);
-			RenderUtils.roundedRect(context, x, y, x + 2, y + 16, 1, (int) Math.round(255 * alpha) << 24 | 0x7C5CFF);
-			RenderUtils.text(context, renderer, entry.text, x + 10, y + 4, ((int) Math.round(255 * alpha) << 24) | 0xE6EAF2);
-			RenderUtils.text(context, renderer, state, x + width - 10 - renderer.getWidth(state), y + 4,
-					((int) Math.round(255 * alpha) << 24) | (entry.enabled ? 0x9BE38B : 0xFF8A8A));
+			RenderUtils.roundedRect(context, x, y, x + WIDTH, y + 30, 5, RenderUtils.scaled(theme.card, alpha));
+			RenderUtils.outline(context, x, y, x + WIDTH, y + 30, RenderUtils.scaled(theme.border, alpha));
+			RenderUtils.circle(context, x + 11, y + 11, 3.0, RenderUtils.withAlpha(theme.accent, alpha));
+			RenderUtils.text(context, renderer, entry.text, x + 20, y + 6, textColor);
+			RenderUtils.textNoShadow(context, renderer, state, x + 20, y + 16, stateColor);
+			RenderUtils.roundedRect(context, x, y + 28, x + (int) Math.round(WIDTH * life), y + 30, 1,
+					RenderUtils.withAlpha(theme.accent, alpha));
 
-			y -= 20;
+			y += 36;
 		}
 	}
 

@@ -1,7 +1,5 @@
 package dev.nevva.visuals;
 
-import dev.nevva.visuals.NevvaVisuals;
-
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 
 import net.minecraft.client.option.KeyBinding;
@@ -15,6 +13,7 @@ public final class Keybinds {
 	public static KeyBinding MENU;
 	public static KeyBinding ZOOM;
 	public static KeyBinding HUD;
+	public static KeyBinding HUD_EDITOR;
 
 	private Keybinds() {
 	}
@@ -38,6 +37,13 @@ public final class Keybinds {
 				"key.nevvavisuals.hud",
 				InputUtil.Type.KEYSYM,
 				GLFW.GLFW_KEY_H,
+				CATEGORY
+		));
+
+		HUD_EDITOR = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.nevvavisuals.hud_editor",
+				InputUtil.Type.KEYSYM,
+				GLFW.GLFW_KEY_LEFT_ALT,
 				CATEGORY
 		));
 
