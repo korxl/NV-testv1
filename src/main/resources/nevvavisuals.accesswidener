@@ -1,4 +1,4 @@
 accessWidener	v2	named
 accessible	class	net/minecraft/client/render/BackgroundRenderer$FogType
-accessible	field	net/minecraft/client/MinecraftClient/itemUseCooldown	I
-mutable	field	net/minecraft/client/MinecraftClient/itemUseCooldown	I
+accessible	field	net/minecraft/client/MinecraftClient	itemUseCooldown	I
+mutable	field	net/minecraft/client/MinecraftClient	itemUseCooldown	I
