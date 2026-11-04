@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class WorldMixin {
 	@Inject(method = "getTimeOfDay", at = @At("HEAD"), cancellable = true)
 	private void nevva$timeOfDay(CallbackInfoReturnable<Long> cir) {
-		CustomWorldModule module = resolve();
+		CustomWorldModule module = nevva$resolve();
 
 		if (module == null) {
 			return;
@@ -29,7 +29,7 @@ public class WorldMixin {
 
 	@Inject(method = "getSkyAngleRadians", at = @At("HEAD"), cancellable = true)
 	private void nevva$skyAngle(float tickDelta, CallbackInfoReturnable<Float> cir) {
-		CustomWorldModule module = resolve();
+		CustomWorldModule module = nevva$resolve();
 
 		if (module == null) {
 			return;
@@ -43,7 +43,7 @@ public class WorldMixin {
 
 	@Inject(method = "getRainGradient", at = @At("HEAD"), cancellable = true)
 	private void nevva$rainGradient(float delta, CallbackInfoReturnable<Float> cir) {
-		CustomWorldModule module = resolve();
+		CustomWorldModule module = nevva$resolve();
 
 		if (module != null && module.getClearWeather().get()) {
 			cir.setReturnValue(0.0f);
@@ -52,19 +52,20 @@ public class WorldMixin {
 
 	@Inject(method = "getThunderGradient", at = @At("HEAD"), cancellable = true)
 	private void nevva$thunderGradient(float delta, CallbackInfoReturnable<Float> cir) {
-		CustomWorldModule module = resolve();
+		CustomWorldModule module = nevva$resolve();
 
 		if (module != null && module.getClearWeather().get()) {
 			cir.setReturnValue(0.0f);
 		}
 	}
 
-	private CustomWorldModule resolve() {
+	private CustomWorldModule nevva$resolve() {
 		World self = (World) (Object) this;
 
 		if (!self.isClient()) {
 			return null;
 		}
+
 		NevvaVisuals mod = NevvaVisuals.getInstance();
 
 		if (mod == null || mod.getModuleManager() == null) {
