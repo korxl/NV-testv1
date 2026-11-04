@@ -73,7 +73,7 @@ public class NevvaScreen extends Screen {
 
 	private float uiScale() {
 		float fit = Math.min((this.width - 8.0f) / PANEL_W, (this.height - 8.0f) / PANEL_H);
-		return Math.max(0.55f, Math.min(1.0f, fit));
+		return Math.max(0.35f, Math.min(1.0f, fit));
 	}
 
 	private float originX() {
