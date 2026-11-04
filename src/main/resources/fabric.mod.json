@@ -3,7 +3,7 @@
   "id": "nevvavisuals",
   "version": "${version}",
   "name": "NevvaVisuals",
-  "description": "Client-side visual mod: custom HUD, animated Target HUD, aspect ratio, custom fog, custom world time and a modern animated menu.",
+  "description": "Client-side visual mod with a responsive two-column menu, customizable HUD, visual effects and Dark, White and Liquid Glass themes.",
   "authors": [
     "Nevva"
   ],

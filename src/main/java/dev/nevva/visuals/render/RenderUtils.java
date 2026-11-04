@@ -187,6 +187,21 @@ public final class RenderUtils {
 	/** Tiny vector icons drawn from primitives, so the menu needs no textures. */
 	public static void icon(DrawContext context, String kind, int x, int y, int color) {
 		switch (kind) {
+			case "player" -> {
+				circle(context, x + 4.5, y + 2.5, 2.3, color);
+				roundedRect(context, x + 1, y + 5, x + 8, y + 9, 2, color);
+			}
+			case "cosmetic" -> {
+				context.fill(x + 4, y, x + 5, y + 9, color);
+				context.fill(x, y + 4, x + 9, y + 5, color);
+				context.fill(x + 1, y + 1, x + 3, y + 3, color);
+				context.fill(x + 6, y + 6, x + 8, y + 8, color);
+			}
+			case "misc" -> {
+				circle(context, x + 2, y + 4, 1.2, color);
+				circle(context, x + 5, y + 4, 1.2, color);
+				circle(context, x + 8, y + 4, 1.2, color);
+			}
 			case "hud" -> {
 				context.fill(x, y + 1, x + 8, y + 2, color);
 				context.fill(x, y + 4, x + 6, y + 5, color);

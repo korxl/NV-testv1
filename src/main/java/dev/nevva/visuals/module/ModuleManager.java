@@ -3,6 +3,7 @@ package dev.nevva.visuals.module;
 import dev.nevva.visuals.config.Config;
 import dev.nevva.visuals.module.modules.ArrayListModule;
 import dev.nevva.visuals.module.modules.AspectRatioModule;
+import dev.nevva.visuals.module.modules.CinematicModule;
 import dev.nevva.visuals.module.modules.CustomFogModule;
 import dev.nevva.visuals.module.modules.CustomWorldModule;
 import dev.nevva.visuals.module.modules.FullbrightModule;
@@ -54,6 +55,7 @@ public final class ModuleManager {
 		register(new NoDamageTiltModule());
 		register(new NoNauseaModule());
 		register(new NoDarknessModule());
+		register(new CinematicModule());
 
 		register(new CustomWorldModule());
 		register(new CustomFogModule());
@@ -160,7 +162,19 @@ public final class ModuleManager {
 					if (value != null) color.setHue(value.floatValue());
 				} else if (setting instanceof ChoiceSetting choice) {
 					String value = config.choices.get(choice.getKey());
-					if (value != null) choice.setValue(value);
+					if (value != null) {
+						if ("theme".equals(choice.getKey())) {
+							value = switch (value) {
+								case "Nursultan" -> "Aurora";
+								case "Sadness" -> "Amethyst";
+								case "Rockstar" -> "Amber";
+								case "Delta" -> "Ocean";
+								case "Wex" -> "Emerald";
+								default -> value;
+							};
+						}
+						choice.setValue(value);
+					}
 				}
 			}
 		}

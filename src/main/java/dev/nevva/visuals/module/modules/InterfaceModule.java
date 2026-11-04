@@ -8,8 +8,8 @@ import dev.nevva.visuals.module.setting.ColorSetting;
 import dev.nevva.visuals.ui.Theme;
 
 public class InterfaceModule extends Module {
-	private final ChoiceSetting theme = add(new ChoiceSetting("theme", "Theme", "Nursultan",
-			"Nursultan", "Sadness", "Rockstar", "Delta", "Wex", "Custom"));
+	private final ChoiceSetting theme = add(new ChoiceSetting("theme", "Theme", "Liquid Glass",
+			"Dark", "White", "Liquid Glass", "Aurora", "Amethyst", "Amber", "Ocean", "Emerald", "Custom"));
 	private final ColorSetting accent = add(new ColorSetting("accent_hue", "Custom accent", 190.0f));
 	private final ChoiceSetting font = add(new ChoiceSetting("font", "Font", "Default",
 			"Default", "Caps", "Soft"));

@@ -12,6 +12,7 @@ import dev.nevva.visuals.hud.TargetHud;
 import dev.nevva.visuals.hud.Watermark;
 import dev.nevva.visuals.module.Module;
 import dev.nevva.visuals.module.ModuleManager;
+import dev.nevva.visuals.module.modules.CinematicModule;
 import dev.nevva.visuals.module.modules.HudModule;
 import dev.nevva.visuals.module.modules.InterfaceModule;
 import dev.nevva.visuals.ui.Fonts;
@@ -131,12 +132,21 @@ public class NevvaVisuals implements ClientModInitializer {
 			Fonts.set(ui.getFont().getValue());
 		}
 
-		watermark.render(context);
-		hudRenderer.render(context);
-		arrayListHud.render(context);
-		targetHud.render(context);
-		keystrokes.render(context);
-		notifications.render(context);
+		CinematicModule cinematic = moduleManager.get(CinematicModule.class);
+		boolean hideHud = cinematic != null && cinematic.isEnabled() && cinematic.hidesHud();
+
+		if (!hideHud) {
+			watermark.render(context);
+			hudRenderer.render(context);
+			arrayListHud.render(context);
+			targetHud.render(context);
+			keystrokes.render(context);
+			notifications.render(context);
+		}
+
+		if (cinematic != null && cinematic.isEnabled()) {
+			cinematic.renderOverlay(context);
+		}
 	}
 
 	public void openHudEditor() {
@@ -193,6 +203,6 @@ public class NevvaVisuals implements ClientModInitializer {
 	public Theme getTheme() {
 		InterfaceModule ui = moduleManager == null ? null : moduleManager.get(InterfaceModule.class);
 
-		return ui == null ? Theme.of("Nursultan", 190.0f) : ui.resolveTheme();
+		return ui == null ? Theme.of("Liquid Glass", 190.0f) : ui.resolveTheme();
 	}
 }
