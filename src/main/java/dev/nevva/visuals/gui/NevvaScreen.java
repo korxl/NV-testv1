@@ -4,6 +4,10 @@ import dev.nevva.visuals.NevvaVisuals;
 import dev.nevva.visuals.anim.Animation;
 import dev.nevva.visuals.module.Category;
 import dev.nevva.visuals.module.Module;
+import dev.nevva.visuals.module.modules.InterfaceModule;
+import dev.nevva.visuals.module.modules.MusicWidgetModule;
+import dev.nevva.visuals.module.modules.TargetHudModule;
+import dev.nevva.visuals.module.modules.WatermarkModule;
 import dev.nevva.visuals.module.setting.BoolSetting;
 import dev.nevva.visuals.module.setting.ChoiceSetting;
 import dev.nevva.visuals.module.setting.ColorSetting;
@@ -15,8 +19,11 @@ import dev.nevva.visuals.ui.Theme;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
+
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,18 +31,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * NevvaVisuals menu. The whole panel is laid out in a fixed coordinate space and
- * scaled down to fit any screen, so it never gets cut off on a phone.
- */
+/** Responsive glass-style configuration menu. */
 public class NevvaScreen extends Screen {
-	private static final int PANEL_W = 600;
-	private static final int PANEL_H = 360;
-	private static final int SIDEBAR_W = 110;
-	private static final int LIST_W = 226;
-	private static final int ROW_H = 26;
-	private static final int CONTENT_Y = 52;
-	private static final int CONTENT_H = PANEL_H - CONTENT_Y - 18;
+	private static final int PANEL_W = 720;
+	private static final int PANEL_H = 420;
+	private static final int SIDEBAR_W = 136;
+	private static final int LIST_X = 148;
+	private static final int LIST_W = 245;
+	private static final int DETAIL_X = 405;
+	private static final int DETAIL_W = 303;
+	private static final int LIST_TOP = 96;
+	private static final int LIST_BOTTOM = 397;
+	private static final int ROW_STEP = 49;
+	private static final int ROW_H = 44;
 
 	private final NevvaVisuals mod;
 	private final Animation open = new Animation(0.0, 12.0);
@@ -45,35 +53,27 @@ public class NevvaScreen extends Screen {
 	private final List<Ripple> ripples = new ArrayList<>();
 
 	private String search = "";
-	private Category category;
+	private Category category = Category.RENDER;
 	private Module selected;
+	private Module awaitingBind;
+	private Hit dragHit;
 	private int scroll;
-	private boolean dragging;
-	private NumberSetting dragSetting;
+	private boolean searchFocused;
+	private boolean settingsOpen;
 
 	public NevvaScreen(NevvaVisuals mod) {
-		super(Text.literal("NevvaVisuals"));
+		super(Text.literal("shadow"));
 		this.mod = mod;
 	}
 
 	@Override
 	protected void init() {
 		open.setValue(0.0);
-
-		if (selected == null) {
-			List<Module> modules = mod.getModuleManager().getModules();
-
-			if (!modules.isEmpty()) {
-				selected = modules.get(0);
-			}
-		}
 	}
 
-	// ---------------------------------------------------------------- geometry
-
 	private float uiScale() {
-		float fit = Math.min((this.width - 8.0f) / PANEL_W, (this.height - 8.0f) / PANEL_H);
-		return Math.max(0.35f, Math.min(1.0f, fit));
+		float fit = Math.min((this.width - 12.0f) / PANEL_W, (this.height - 12.0f) / PANEL_H);
+		return Math.max(0.2f, Math.min(1.0f, fit));
 	}
 
 	private float originX() {
@@ -92,27 +92,30 @@ public class NevvaScreen extends Screen {
 		return (float) ((mouseY - originY()) / uiScale());
 	}
 
-	private List<Category> tabs() {
-		List<Category> tabs = new ArrayList<>();
-		tabs.add(null);
-		tabs.add(Category.HUD);
-		tabs.add(Category.RENDER);
-		tabs.add(Category.WORLD);
-		tabs.add(Category.CLIENT);
-		tabs.add(Category.MISC);
+	private List<Category> categories() {
+		return List.of(Category.COMBAT, Category.RENDER, Category.MOVEMENT);
+	}
 
-		return tabs;
+	private Category menuCategory(Category moduleCategory) {
+		if (moduleCategory == Category.COMBAT || moduleCategory == Category.MOVEMENT) {
+			return moduleCategory;
+		}
+
+		return Category.RENDER;
 	}
 
 	private List<Module> visibleModules() {
 		List<Module> result = new ArrayList<>();
+		String query = search.toLowerCase(Locale.ROOT);
 
 		for (Module module : mod.getModuleManager().getModules()) {
-			if (category != null && module.getCategory() != category) {
+			if (menuCategory(module.getCategory()) != category) {
 				continue;
 			}
 
-			if (!search.isEmpty() && !module.getName().toLowerCase(Locale.ROOT).contains(search)) {
+			if (!query.isEmpty()
+					&& !module.getName().toLowerCase(Locale.ROOT).contains(query)
+					&& !module.getDescription().toLowerCase(Locale.ROOT).contains(query)) {
 				continue;
 			}
 
@@ -121,8 +124,6 @@ public class NevvaScreen extends Screen {
 
 		return result;
 	}
-
-	// ------------------------------------------------------------------ render
 
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float delta) {
@@ -133,219 +134,340 @@ public class NevvaScreen extends Screen {
 		float scale = uiScale();
 		float mx = uiX(mouseX);
 		float my = uiY(mouseY);
-		double t = open.get();
+		hits.clear();
 
-		context.fill(0, 0, this.width, this.height, (int) Math.round(0x96 * t) << 24);
+		context.fill(0, 0, this.width, this.height, RenderUtils.withAlpha(0xFF030812, 0.72 * open.get()));
 
 		var matrices = context.getMatrices();
 		matrices.push();
 		matrices.translate(originX(), originY(), 0.0f);
-		matrices.scale(scale * (float) (0.97 + 0.03 * t), scale * (float) (0.97 + 0.03 * t), 1.0f);
+		matrices.scale(scale, scale, 1.0f);
 
-		RenderUtils.glow(context, 0, 0, PANEL_W, PANEL_H, 12, 0x60000000);
-		RenderUtils.roundedRect(context, 0, 0, PANEL_W, PANEL_H, 10, theme.background);
-		RenderUtils.horizontalGradient(context, 1, 1, PANEL_W - 1, 3, theme.accent, theme.accent2);
-		RenderUtils.outline(context, 0, 0, PANEL_W, PANEL_H, theme.border);
-
-		RenderUtils.roundedRect(context, 6, 6, SIDEBAR_W + 4, PANEL_H - 6, 8, theme.sidebar);
+		RenderUtils.glow(context, 0, 0, PANEL_W, PANEL_H, 15,
+				RenderUtils.withAlpha(theme.accent, 0.18 * open.get()));
+		RenderUtils.panel(context, 0, 0, PANEL_W, PANEL_H, 12, theme.background,
+				RenderUtils.withAlpha(theme.border, 0.95));
+		RenderUtils.gradientRect(context, 1, 1, PANEL_W - 1, PANEL_H - 1,
+				RenderUtils.withAlpha(theme.accent, 0.035), 0x00000000);
+		RenderUtils.roundedRect(context, 6, 6, SIDEBAR_W + 3, PANEL_H - 6, 9, theme.sidebar);
+		RenderUtils.outline(context, 6, 6, SIDEBAR_W + 3, PANEL_H - 6, RenderUtils.withAlpha(theme.border, 0.75));
 
 		TextRenderer renderer = this.textRenderer;
 		drawSidebar(context, renderer, theme, mx, my);
-		drawList(context, renderer, theme, mx, my);
-		drawSettings(context, renderer, theme, mx, my);
+		drawHeader(context, renderer, theme, mx, my);
+		drawModuleList(context, renderer, theme, mx, my);
+		drawDetail(context, renderer, theme, mx, my);
 		drawRipples(context, theme);
 
 		matrices.pop();
 	}
 
 	private void drawSidebar(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
-		RenderUtils.text(context, renderer, "Nevva", 14, 12, theme.text);
-		RenderUtils.text(context, renderer, "Visuals", 14 + RenderUtils.width(renderer, "Nevva") + 2, 12, theme.accent);
-		RenderUtils.textNoShadow(context, renderer, "1.2", 14, 22, theme.dim);
+		RenderUtils.roundedRect(context, 14, 15, 38, 39, 7, RenderUtils.withAlpha(theme.accent, 0.22));
+		RenderUtils.outline(context, 14, 15, 38, 39, RenderUtils.withAlpha(theme.accent, 0.8));
+		RenderUtils.centeredText(context, renderer, "N", 26, 21, theme.accent2);
+		RenderUtils.text(context, renderer, "shadow", 45, 16, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "VISUAL CLIENT", 45, 28, theme.dim);
 
-		int sx = 12;
-		int sy = 34;
-		int sw = SIDEBAR_W - 12;
-
-		RenderUtils.roundedRect(context, sx, sy, sx + sw, sy + 17, 5, theme.column);
-		RenderUtils.outline(context, sx, sy, sx + sw, sy + 17, theme.border);
-		RenderUtils.textNoShadow(context, renderer, search.isEmpty() ? "Search..." : search, sx + 6, sy + 5,
+		RenderUtils.roundedRect(context, 12, 53, SIDEBAR_W - 7, 76, 6, theme.column);
+		RenderUtils.outline(context, 12, 53, SIDEBAR_W - 7, 76, theme.border);
+		String searchDisplay = search.isEmpty() ? "Search modules" : trim(search, SIDEBAR_W - 34, renderer);
+		RenderUtils.textNoShadow(context, renderer, searchDisplay, 20, 62,
 				search.isEmpty() ? theme.dim : theme.text);
 
-		if (!search.isEmpty() && (System.currentTimeMillis() / 500L) % 2L == 0L) {
-			int caret = sx + 6 + renderer.getWidth(search);
-			context.fill(caret + 1, sy + 4, caret + 2, sy + 13, theme.accent2);
+		if (searchFocused && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+			int caret = 20 + RenderUtils.width(renderer, searchDisplay);
+			context.fill(caret + 2, 60, caret + 3, 70, theme.accent2);
 		}
 
-		List<Category> tabs = tabs();
+		RenderUtils.textNoShadow(context, renderer, "CATEGORIES", 15, 91, theme.dim);
+		List<Category> categories = categories();
 
-		for (int i = 0; i < tabs.size(); i++) {
-			Category tab = tabs.get(i);
-			int ty = 60 + i * 22;
+		for (int i = 0; i < categories.size(); i++) {
+			Category tab = categories.get(i);
+			int y = 106 + i * 34;
 			boolean active = category == tab;
-			boolean hovered = mouseX >= sx && mouseX <= sx + sw && mouseY >= ty && mouseY <= ty + 19;
+			boolean over = hovered(12, y, SIDEBAR_W - 7, y + 28, mouseX, mouseY);
 
 			if (active) {
-				RenderUtils.roundedRect(context, sx, ty, sx + sw, ty + 19, 5, theme.card);
-				RenderUtils.roundedRect(context, sx, ty + 5, sx + 2, ty + 14, 1, theme.accent);
-			} else if (hovered) {
-				RenderUtils.roundedRect(context, sx, ty, sx + sw, ty + 19, 5, RenderUtils.withAlpha(theme.card, 0.5));
+				RenderUtils.roundedRect(context, 12, y, SIDEBAR_W - 7, y + 28, 6,
+						RenderUtils.withAlpha(theme.accent, 0.18));
+				RenderUtils.roundedRect(context, 12, y + 7, 14, y + 21, 1, theme.accent);
+			} else if (over) {
+				RenderUtils.roundedRect(context, 12, y, SIDEBAR_W - 7, y + 28, 6,
+						RenderUtils.withAlpha(theme.card, 0.75));
 			}
 
 			int color = active ? theme.text : theme.dim;
-			RenderUtils.icon(context, tab == null ? "misc" : tab.getIcon(), sx + 8, ty + 6, active ? theme.accent : color);
-			RenderUtils.text(context, renderer, tab == null ? "All" : tab.getLabel(), sx + 22, ty + 6, color);
+			RenderUtils.icon(context, tab.getIcon(), 23, y + 9, active ? theme.accent2 : color);
+			RenderUtils.text(context, renderer, tab.getLabel(), 39, y + 10, color);
 		}
 
-		int buttonY = PANEL_H - 32;
-
-		if (hovered(sx, buttonY, sx + sw, buttonY + 18, mouseX, mouseY)) {
-			RenderUtils.roundedRect(context, sx, buttonY, sx + sw, buttonY + 18, 5, RenderUtils.withAlpha(theme.accent, 0.22));
-		}
-
-		RenderUtils.outline(context, sx, buttonY, sx + sw, buttonY + 18, theme.border);
-		RenderUtils.text(context, renderer, "Edit HUD", sx + 8, buttonY + 6, theme.text);
+		int hudY = PANEL_H - 42;
+		boolean hudHover = hovered(12, hudY, SIDEBAR_W - 7, hudY + 28, mouseX, mouseY);
+		RenderUtils.roundedRect(context, 12, hudY, SIDEBAR_W - 7, hudY + 28, 6,
+				 hudHover ? RenderUtils.withAlpha(theme.accent, 0.18) : theme.column);
+		RenderUtils.outline(context, 12, hudY, SIDEBAR_W - 7, hudY + 28, theme.border);
+		RenderUtils.text(context, renderer, "Edit HUD", 22, hudY + 10, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "ESC  CLOSE", 16, PANEL_H - 14, theme.dim);
 	}
 
-	private void drawList(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
-		int x = SIDEBAR_W + 12;
-		int width = LIST_W;
+	private void drawHeader(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
+		String title = category.getLabel();
+		RenderUtils.text(context, renderer, title, LIST_X, 14, theme.text);
+		int titleWidth = RenderUtils.width(renderer, title);
+
+		RenderUtils.roundedRect(context, LIST_X + titleWidth + 10, 13, LIST_X + titleWidth + 48, 26, 5,
+				RenderUtils.withAlpha(theme.accent, 0.2));
+		RenderUtils.textNoShadow(context, renderer, "BETA", LIST_X + titleWidth + 17, 16, theme.accent2);
+		RenderUtils.textNoShadow(context, renderer, "Visual modules and controls", LIST_X, 31, theme.dim);
+
+		InterfaceModule ui = mod.getModuleManager().get(InterfaceModule.class);
+		ChoiceSetting themeSetting = ui == null ? null : ui.getTheme();
+		String themeName = themeSetting == null ? "Nursultan" : themeSetting.getValue();
+		int x = PANEL_W - 164;
+		boolean over = hovered(x, 13, PANEL_W - 12, 39, mouseX, mouseY);
+		RenderUtils.roundedRect(context, x, 13, PANEL_W - 12, 39, 6,
+				over ? RenderUtils.withAlpha(theme.accent, 0.22) : theme.column);
+		RenderUtils.outline(context, x, 13, PANEL_W - 12, 39, theme.border);
+		RenderUtils.circle(context, x + 12, 26, 3.0, theme.accent);
+		RenderUtils.textNoShadow(context, renderer, "THEME", x + 22, 18, theme.dim);
+		RenderUtils.text(context, renderer, themeName, x + 22, 28, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "v", PANEL_W - 27, 23, theme.accent2);
+	}
+
+	private void drawModuleList(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
+		RenderUtils.panel(context, LIST_X, 52, LIST_X + LIST_W, PANEL_H - 14, 8, theme.column, theme.border);
 		List<Module> modules = visibleModules();
-		int maxScroll = Math.max(0, modules.size() * ROW_H - CONTENT_H);
+		int listHeight = LIST_BOTTOM - LIST_TOP;
+		int maxScroll = Math.max(0, modules.size() * ROW_STEP - listHeight);
 		scroll = (int) MathHelper.clamp(scroll, 0, maxScroll);
 
-		String title = category == null ? "All modules" : category.getLabel();
-		RenderUtils.text(context, renderer, title, x + 2, CONTENT_Y - 18, theme.text);
-		RenderUtils.textNoShadow(context, renderer, modules.size() + " total", x + 2 + RenderUtils.width(renderer, title) + 8,
-				CONTENT_Y - 18, theme.dim);
+		RenderUtils.text(context, renderer, "Modules", LIST_X + 12, 63, theme.text);
+		String count = String.valueOf(modules.size());
+		RenderUtils.textNoShadow(context, renderer, count, LIST_X + LIST_W - 22 - renderer.getWidth(count), 64, theme.dim);
+		RenderUtils.textNoShadow(context, renderer, "LEFT CLICK  TOGGLE  ·  RIGHT CLICK  SETTINGS",
+				LIST_X + 12, 78, theme.dim);
 
+		context.enableScissor(LIST_X + 1, LIST_TOP, LIST_X + LIST_W - 1, LIST_BOTTOM);
 		for (int i = 0; i < modules.size(); i++) {
 			Module module = modules.get(i);
-			int ry = CONTENT_Y + 4 + i * ROW_H - scroll;
+			int y = LIST_TOP + i * ROW_STEP - scroll;
 
-			if (ry + ROW_H < CONTENT_Y || ry > CONTENT_Y + CONTENT_H) {
+			if (y + ROW_H < LIST_TOP || y > LIST_BOTTOM) {
 				continue;
 			}
 
-			Animation rowHover = hover.computeIfAbsent(module, k -> new Animation(0.0, 14.0));
-			boolean rowHovered = mouseX >= x && mouseX <= x + width && mouseY >= ry && mouseY <= ry + ROW_H - 4;
-			rowHover.setTarget(rowHovered ? 1.0 : 0.0);
-			rowHover.update();
+			Animation animation = hover.computeIfAbsent(module, key -> new Animation(0.0, 14.0));
+			boolean over = hovered(LIST_X + 9, y, LIST_X + LIST_W - 9, y + ROW_H - 3, mouseX, mouseY);
+			animation.setTarget(over ? 1.0 : 0.0);
+			animation.update();
 
-			int cardColor = RenderUtils.lerpColor(theme.card, RenderUtils.withAlpha(theme.accent, 0.35), rowHover.get() * 0.6);
-			RenderUtils.roundedRect(context, x, ry, x + width, ry + ROW_H - 4, 5, cardColor);
+			int left = LIST_X + 9;
+			int right = LIST_X + LIST_W - 9;
+			int bottom = y + ROW_H - 3;
+			int fill = RenderUtils.lerpColor(theme.card, RenderUtils.withAlpha(theme.accent, 0.28), animation.get() * 0.7);
+			RenderUtils.roundedRect(context, left, y, right, bottom, 6, fill);
+			RenderUtils.outline(context, left, y, right, bottom,
+					module == selected && settingsOpen ? RenderUtils.withAlpha(theme.accent, 0.9) : theme.border);
 
-			if (module == selected) {
-				RenderUtils.outline(context, x, ry, x + width, ry + ROW_H - 4, RenderUtils.withAlpha(theme.accent, 0.8));
+			RenderUtils.text(context, renderer, module.getName(), left + 11, y + 8, theme.text);
+			String description = trim(module.getDescription(), LIST_W - 74, renderer);
+			RenderUtils.textNoShadow(context, renderer, description, left + 11, y + 23, theme.dim);
+			drawKnob(context, theme, module, right - 37, y + 9);
+
+			if (module.getKeyCode() >= 0) {
+				String key = bindName(module);
+				RenderUtils.textNoShadow(context, renderer, key, right - 12 - renderer.getWidth(key), y + 24, theme.accent2);
 			}
-
-			RenderUtils.text(context, renderer, module.getName(), x + 10, ry + 4, theme.text);
-			RenderUtils.textNoShadow(context, renderer, module.getCategory().getLabel(), x + 10, ry + 14, theme.dim);
-			drawKnob(context, theme, module, x + width - 36, ry + 7);
 		}
+		context.disableScissor();
 
 		if (modules.isEmpty()) {
-			RenderUtils.centeredText(context, renderer, "Nothing found", x + width / 2, CONTENT_Y + 16, theme.dim);
+			RenderUtils.centeredText(context, renderer, "No matching modules", LIST_X + LIST_W / 2, LIST_TOP + 16, theme.dim);
 		}
 	}
 
 	private void drawKnob(DrawContext context, Theme theme, Module module, int x, int y) {
-		Animation animation = knobs.computeIfAbsent(module, k -> new Animation(module.isEnabled() ? 1.0 : 0.0, 16.0));
+		Animation animation = knobs.computeIfAbsent(module, key -> new Animation(module.isEnabled() ? 1.0 : 0.0, 16.0));
 		animation.setTarget(module.isEnabled() ? 1.0 : 0.0);
 		animation.update();
 
-		double v = animation.get();
-		RenderUtils.roundedRect(context, x, y, x + 26, y + 11, 5, RenderUtils.lerpColor(theme.track, theme.accent, v));
-		int knobX = (int) Math.round(x + 2 + v * 13);
-		RenderUtils.circle(context, knobX + 4.5, y + 5.5, 4.5, 0xFFF4F6FB);
+		double value = animation.get();
+		RenderUtils.roundedRect(context, x, y, x + 26, y + 12,
+				6, RenderUtils.lerpColor(theme.track, theme.accent, value));
+		int knobX = (int) Math.round(x + 2 + value * 12);
+		RenderUtils.circle(context, knobX + 4, y + 6, 4.0, 0xFFF4F8FF);
 	}
 
-	private void drawSettings(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
-		hits.clear();
+	private void drawDetail(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
+		RenderUtils.panel(context, DETAIL_X, 52, DETAIL_X + DETAIL_W, PANEL_H - 14, 8, theme.column, theme.border);
 
-		int x = SIDEBAR_W + 12 + LIST_W + 12;
-		int width = PANEL_W - x - 12;
+		if (settingsOpen && selected != null) {
+			drawSettings(context, renderer, theme, selected, mouseX, mouseY);
+		} else {
+			drawDashboard(context, renderer, theme, mouseX, mouseY);
+		}
+	}
 
-		RenderUtils.roundedRect(context, x, CONTENT_Y, x + width, CONTENT_Y + CONTENT_H, 7, theme.column);
-		RenderUtils.outline(context, x, CONTENT_Y, x + width, CONTENT_Y + CONTENT_H, theme.border);
+	private void drawSettings(DrawContext context, TextRenderer renderer, Theme theme, Module module,
+			float mouseX, float mouseY) {
+		int x = DETAIL_X + 13;
+		int right = DETAIL_X + DETAIL_W - 13;
+		RenderUtils.text(context, renderer, module.getName(), x, 64, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "MODULE SETTINGS", x, 78, theme.accent2);
+		RenderUtils.textNoShadow(context, renderer, "×", right - 9, 64, theme.dim);
+		RenderUtils.textNoShadow(context, renderer, trim(module.getDescription(), DETAIL_W - 28, renderer), x, 91, theme.dim);
 
-		if (selected == null) {
-			RenderUtils.centeredText(context, renderer, "Select a module", x + width / 2, CONTENT_Y + 18, theme.dim);
+		int bindY = 109;
+		RenderUtils.text(context, renderer, "Keybind", x, bindY + 7, theme.text);
+		String bindLabel = awaitingBind == module ? "Press a key..." : bindName(module);
+		int bindWidth = Math.max(84, renderer.getWidth(bindLabel) + 18);
+		int bindX = right - bindWidth;
+		boolean bindHover = hovered(bindX, bindY, right, bindY + 24, mouseX, mouseY);
+		RenderUtils.roundedRect(context, bindX, bindY, right, bindY + 24, 5,
+				bindHover ? RenderUtils.withAlpha(theme.accent, 0.22) : theme.card);
+		RenderUtils.outline(context, bindX, bindY, right, bindY + 24, theme.border);
+		RenderUtils.centeredText(context, renderer, bindLabel, bindX + bindWidth / 2, bindY + 8,
+				awaitingBind == module ? theme.accent2 : theme.text);
+		hits.add(new Hit(module, bindX, bindY, right, bindY + 24, 5));
+
+		RenderUtils.textNoShadow(context, renderer, "SETTINGS", x, 145, theme.dim);
+		int y = 159;
+
+		for (Setting<?> setting : module.getSettings()) {
+			if (y > PANEL_H - 31) {
+				break;
+			}
+
+			if (setting instanceof BoolSetting bool) {
+				RenderUtils.text(context, renderer, bool.getLabel(), x, y + 4, theme.text);
+				drawStaticKnob(context, theme, right - 28, y + 1, bool.get());
+				hits.add(new Hit(setting, x, y, right, y + 21, 1));
+				y += 29;
+			} else if (setting instanceof NumberSetting number) {
+				RenderUtils.text(context, renderer, number.getLabel(), x, y, theme.text);
+				String value = format(number.get());
+				RenderUtils.textNoShadow(context, renderer, value, right - renderer.getWidth(value), y, theme.accent2);
+				int barY = y + 18;
+				drawSlider(context, theme, x, right, barY, number.getProgress());
+				hits.add(new Hit(setting, x, barY - 5, right, barY + 8, 2));
+				y += 39;
+			} else if (setting instanceof ChoiceSetting choice) {
+				RenderUtils.text(context, renderer, choice.getLabel(), x, y + 4, theme.text);
+				String value = choice.getValue();
+				int valueWidth = renderer.getWidth(value);
+				int valueX = right - valueWidth;
+				RenderUtils.textNoShadow(context, renderer, "<", valueX - 12, y + 4, theme.dim);
+				RenderUtils.textNoShadow(context, renderer, value, valueX, y + 4, theme.accent2);
+				RenderUtils.textNoShadow(context, renderer, ">", right + 1, y + 4, theme.dim);
+				hits.add(new Hit(setting, x, y, right, y + 21, 3));
+				y += 29;
+			} else if (setting instanceof ColorSetting color) {
+				RenderUtils.text(context, renderer, color.getLabel(), x, y, theme.text);
+				int barY = y + 18;
+				int barRight = right - 12;
+				for (int i = 0; i < 30; i++) {
+					int x1 = x + (barRight - x) * i / 30;
+					int x2 = x + (barRight - x) * (i + 1) / 30 + 1;
+					context.fill(x1, barY, x2, barY + 5, 0xFF000000 | ColorSetting.hsvToRgb(i * 12.0f, 0.78f, 1.0f));
+				}
+				int knobX = x + (int) Math.round((barRight - x) * color.getHue() / 360.0f);
+				RenderUtils.circle(context, knobX, barY + 2.5, 3.5, 0xFFFFFFFF);
+				RenderUtils.circle(context, right - 5, y + 3, 4.0, 0xFF000000 | color.getColor());
+				hits.add(new Hit(setting, x, barY - 5, barRight, barY + 9, 4));
+				y += 39;
+			}
+		}
+	}
+
+	private void drawDashboard(DrawContext context, TextRenderer renderer, Theme theme, float mouseX, float mouseY) {
+		int x = DETAIL_X + 13;
+		int right = DETAIL_X + DETAIL_W - 13;
+		RenderUtils.text(context, renderer, "Quick controls", x, 64, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "VISUAL HUD", x, 78, theme.accent2);
+
+		WatermarkModule watermark = mod.getModuleManager().get(WatermarkModule.class);
+		TargetHudModule target = mod.getModuleManager().get(TargetHudModule.class);
+		drawQuickToggle(context, renderer, theme, watermark, x, 91, right, mouseX, mouseY);
+		drawQuickToggle(context, renderer, theme, target, x, 134, right, mouseX, mouseY);
+
+		MusicWidgetModule music = mod.getModuleManager().get(MusicWidgetModule.class);
+		if (music == null) {
 			return;
 		}
 
-		RenderUtils.text(context, renderer, selected.getName(), x + 12, CONTENT_Y + 10, theme.text);
-		RenderUtils.textNoShadow(context, renderer, selected.getCategory().getLabel(), x + 12,
-				CONTENT_Y + 21, theme.accent2);
-		RenderUtils.textNoShadow(context, renderer, trim(selected.getDescription(), width - 24, renderer),
-				x + 12, CONTENT_Y + 33, theme.dim);
+		int top = 181;
+		RenderUtils.roundedRect(context, x, top, right, PANEL_H - 26, 7, theme.card);
+		if (!music.isEnabled()) {
+			RenderUtils.outline(context, x, top, right, PANEL_H - 26, theme.border);
+			RenderUtils.text(context, renderer, "Music widget is disabled", x + 11, top + 34, theme.text);
+			RenderUtils.textNoShadow(context, renderer, "Enable it from the module list to use its controls.",
+					x + 11, top + 51, theme.dim);
+			return;
+		}
+		RenderUtils.outline(context, x, top, right, PANEL_H - 26, theme.border);
+		RenderUtils.textNoShadow(context, renderer, "MUSIC PLAYER", x + 11, top + 12, theme.dim);
+		RenderUtils.roundedRect(context, right - 70, top + 7, right - 9, top + 20, 5,
+				RenderUtils.withAlpha(theme.accent, 0.16));
+		RenderUtils.centeredText(context, renderer, "UI PREVIEW", right - 39, top + 10, theme.accent2);
+		RenderUtils.text(context, renderer, "Midnight Signal", x + 11, top + 34, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "shadow radio  ·  instrumental", x + 11, top + 47, theme.dim);
 
-		int y = CONTENT_Y + 50;
+		int progressY = top + 68;
+		drawSlider(context, theme, x + 11, right - 11, progressY, music.getProgress().getProgress());
+		String percent = format(music.getProgress().get()) + "%";
+		RenderUtils.textNoShadow(context, renderer, percent, right - 11 - renderer.getWidth(percent), progressY + 9, theme.dim);
+		hits.add(new Hit(music.getProgress(), x + 11, progressY - 5, right - 11, progressY + 8, 2));
 
-		for (Setting<?> setting : selected.getSettings()) {
-			if (setting instanceof BoolSetting bool) {
-				RenderUtils.text(context, renderer, bool.getLabel(), x + 12, y + 2, theme.text);
-				drawStaticKnob(context, theme, x + width - 38, y, bool.get());
-				hits.add(new Hit(setting, x + width - 40, y - 2, x + width - 8, y + 14, 1));
-				y += 24;
-			} else if (setting instanceof NumberSetting number) {
-				RenderUtils.text(context, renderer, number.getLabel(), x + 12, y, theme.text);
-				String value = format(number.get());
-				RenderUtils.textNoShadow(context, renderer, value, x + width - 12 - renderer.getWidth(value), y, theme.accent2);
+		int buttonY = top + 93;
+		String playback = music.getPlaying().get() ? "PAUSE PREVIEW" : "PLAY PREVIEW";
+		RenderUtils.roundedRect(context, x + 11, buttonY, right - 11, buttonY + 25, 5,
+				RenderUtils.withAlpha(theme.accent, 0.2));
+		RenderUtils.outline(context, x + 11, buttonY, right - 11, buttonY + 25, RenderUtils.withAlpha(theme.accent, 0.55));
+		RenderUtils.centeredText(context, renderer, playback, (x + right) / 2, buttonY + 9, theme.text);
+		hits.add(new Hit(music.getPlaying(), x + 11, buttonY, right - 11, buttonY + 25, 1));
 
-				int barX1 = x + 12;
-				int barX2 = x + width - 12;
-				int barY = y + 13;
-				double progress = MathHelper.clamp(number.getProgress(), 0.0, 1.0);
+		int bassY = top + 131;
+		RenderUtils.text(context, renderer, "BassBoost", x + 11, bassY, theme.text);
+		String bass = format(music.getBassBoost().get()) + "%";
+		RenderUtils.textNoShadow(context, renderer, bass, right - 11 - renderer.getWidth(bass), bassY, theme.accent2);
+		int bassBarY = bassY + 16;
+		drawSlider(context, theme, x + 11, right - 11, bassBarY, music.getBassBoost().getProgress());
+		hits.add(new Hit(music.getBassBoost(), x + 11, bassBarY - 5, right - 11, bassBarY + 8, 2));
+		RenderUtils.textNoShadow(context, renderer, "Controls are visual only; no audio is played.", x + 11, bassBarY + 17, theme.dim);
+	}
 
-				RenderUtils.roundedRect(context, barX1, barY, barX2, barY + 4, 2, theme.track);
-				int fill = barX1 + (int) Math.round((barX2 - barX1) * progress);
-				RenderUtils.horizontalGradient(context, barX1, barY, Math.max(barX1 + 2, fill), barY + 4,
-						theme.accent, theme.accent2);
-				RenderUtils.circle(context, fill, barY + 2.0, 3.0, 0xFFF4F6FB);
-				hits.add(new Hit(setting, barX1, barY - 6, barX2, barY + 10, 2));
-				y += 28;
-			} else if (setting instanceof ColorSetting color) {
-				RenderUtils.text(context, renderer, color.getLabel(), x + 12, y, theme.text);
-
-				int previewX = x + width - 26;
-				RenderUtils.circle(context, previewX + 6, y + 4, 6.0, 0xFF000000 | color.getColor());
-
-				int barX1 = x + 12;
-				int barX2 = x + width - 34;
-				int barY = y + 13;
-
-				for (int i = 0; i < 24; i++) {
-					int segmentX1 = barX1 + (barX2 - barX1) * i / 24;
-					int segmentX2 = barX1 + (barX2 - barX1) * (i + 1) / 24 + 1;
-					int rgb = ColorSetting.hsvToRgb(i * 15.0f, 0.72f, 1.0f);
-					context.fill(segmentX1, barY, segmentX2, barY + 4, 0xFF000000 | rgb);
-				}
-
-				int knobX = barX1 + (int) Math.round((barX2 - barX1) * (color.getHue() / 360.0f));
-				RenderUtils.circle(context, knobX, barY + 2.0, 3.0, 0xFFFFFFFF);
-				hits.add(new Hit(setting, barX1, barY - 6, barX2, barY + 10, 4));
-				y += 28;
-			} else if (setting instanceof ChoiceSetting choice) {
-				RenderUtils.text(context, renderer, choice.getLabel(), x + 12, y + 2, theme.text);
-
-				String value = choice.getValue();
-				int valueWidth = renderer.getWidth(value);
-				int valueX = x + width - 12 - valueWidth;
-				RenderUtils.textNoShadow(context, renderer, "<", valueX - 8, y + 2, theme.dim);
-				RenderUtils.textNoShadow(context, renderer, value, valueX, y + 2, theme.accent2);
-				RenderUtils.textNoShadow(context, renderer, ">", valueX + valueWidth + 3, y + 2, theme.dim);
-				hits.add(new Hit(setting, valueX - 12, y - 2, x + width - 8, y + 14, 3));
-				y += 24;
-			}
+	private void drawQuickToggle(DrawContext context, TextRenderer renderer, Theme theme, Module module,
+			int x, int y, int right, float mouseX, float mouseY) {
+		if (module == null) {
+			return;
 		}
 
+		boolean over = hovered(x, y, right, y + 36, mouseX, mouseY);
+		RenderUtils.roundedRect(context, x, y, right, y + 36, 6,
+				over ? RenderUtils.withAlpha(theme.accent, 0.13) : theme.card);
+		RenderUtils.outline(context, x, y, right, y + 36, theme.border);
+		RenderUtils.text(context, renderer, module.getName(), x + 10, y + 7, theme.text);
+		RenderUtils.textNoShadow(context, renderer, "HUD widget", x + 10, y + 20, theme.dim);
+		drawKnob(context, theme, module, right - 36, y + 12);
+		hits.add(new Hit(module, x, y, right, y + 36, 6));
+	}
+
+	private void drawSlider(DrawContext context, Theme theme, int x1, int x2, int y, double progress) {
+		double value = Math.max(0.0, Math.min(1.0, progress));
+		RenderUtils.roundedRect(context, x1, y, x2, y + 4, 2, theme.track);
+		int fill = x1 + (int) Math.round((x2 - x1) * value);
+		if (fill > x1) {
+			RenderUtils.horizontalGradient(context, x1, y, fill, y + 4, theme.accent, theme.accent2);
+		}
+		RenderUtils.circle(context, fill, y + 2.0, 3.0, 0xFFF4F8FF);
 	}
 
 	private void drawStaticKnob(DrawContext context, Theme theme, int x, int y, boolean on) {
-		RenderUtils.roundedRect(context, x, y, x + 26, y + 11, 5, on ? theme.accent : theme.track);
-		int knobX = on ? x + 15 : x + 2;
-		RenderUtils.circle(context, knobX + 4.5, y + 5.5, 4.5, 0xFFF4F6FB);
+		RenderUtils.roundedRect(context, x, y, x + 26, y + 12, 6, on ? theme.accent : theme.track);
+		int knobX = on ? x + 14 : x + 2;
+		RenderUtils.circle(context, knobX + 4, y + 6, 4.0, 0xFFF4F8FF);
 	}
 
 	private void drawRipples(DrawContext context, Theme theme) {
@@ -353,19 +475,24 @@ public class NevvaScreen extends Screen {
 
 		for (int i = ripples.size() - 1; i >= 0; i--) {
 			Ripple ripple = ripples.get(i);
-			double age = (now - ripple.start) / 320.0;
+			double age = (now - ripple.start) / 340.0;
 
 			if (age >= 1.0) {
 				ripples.remove(i);
 				continue;
 			}
 
-			RenderUtils.circle(context, ripple.x, ripple.y, 6 + age * 34, RenderUtils.withAlpha(theme.accent, (1.0 - age) * 0.22));
+			RenderUtils.circle(context, ripple.x, ripple.y, 5 + age * 30,
+					RenderUtils.withAlpha(theme.accent, (1.0 - age) * 0.18));
 		}
 	}
 
-	private boolean hovered(int x1, int y1, int x2, int y2, float mouseX, float mouseY) {
-		return mouseX >= x1 && mouseX <= x2 && mouseY >= y1 && mouseY <= y2;
+	private String bindName(Module module) {
+		if (module == null || module.getKeyCode() < 0) {
+			return "Unbound";
+		}
+
+		return InputUtil.fromKeyCode(module.getKeyCode(), 0).getLocalizedText().getString();
 	}
 
 	private String trim(String text, int maxWidth, TextRenderer renderer) {
@@ -374,18 +501,15 @@ public class NevvaScreen extends Screen {
 		}
 
 		StringBuilder builder = new StringBuilder();
-
 		for (int i = 0; i < text.length(); i++) {
 			String next = builder.toString() + text.charAt(i);
-
-			if (renderer.getWidth(next + "...") > maxWidth) {
+			if (renderer.getWidth(next + "…") > maxWidth) {
 				break;
 			}
-
 			builder.append(text.charAt(i));
 		}
 
-		return builder + "...";
+		return builder + "…";
 	}
 
 	private String format(double value) {
@@ -394,17 +518,17 @@ public class NevvaScreen extends Screen {
 				: String.format(Locale.ROOT, "%.1f", value);
 	}
 
-	// ------------------------------------------------------------------- input
+	private boolean hovered(int x1, int y1, int x2, int y2, float mouseX, float mouseY) {
+		return mouseX >= x1 && mouseX <= x2 && mouseY >= y1 && mouseY <= y2;
+	}
 
 	@Override
 	public boolean charTyped(char chr, int modifiers) {
-		if (chr >= 32 && chr != 127) {
-			search = (search + Character.toLowerCase(chr)).trim();
-
-			if (search.length() > 16) {
-				search = search.substring(0, 16);
+		if (searchFocused && chr >= 32 && chr != 127) {
+			search += Character.toLowerCase(chr);
+			if (search.length() > 32) {
+				search = search.substring(0, 32);
 			}
-
 			scroll = 0;
 			return true;
 		}
@@ -414,9 +538,27 @@ public class NevvaScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-		if (keyCode == 259 && !search.isEmpty()) {
+		if (awaitingBind != null) {
+			awaitingBind.setKeyCode(keyCode == GLFW.GLFW_KEY_ESCAPE ? -1 : keyCode);
+			awaitingBind = null;
+			mod.saveConfig();
+			return true;
+		}
+
+		if (keyCode == GLFW.GLFW_KEY_ESCAPE && settingsOpen) {
+			settingsOpen = false;
+			searchFocused = false;
+			return true;
+		}
+
+		if (searchFocused && keyCode == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) {
 			search = search.substring(0, search.length() - 1);
 			scroll = 0;
+			return true;
+		}
+
+		if (searchFocused && keyCode == GLFW.GLFW_KEY_ENTER) {
+			searchFocused = false;
 			return true;
 		}
 
@@ -427,89 +569,140 @@ public class NevvaScreen extends Screen {
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		float mx = uiX(mouseX);
 		float my = uiY(mouseY);
-		int sx = 12;
-		int sw = SIDEBAR_W - 12;
+		searchFocused = button == 0 && hovered(12, 53, SIDEBAR_W - 7, 76, mx, my);
 
-		List<Category> tabs = tabs();
+		if (button != 0 && button != 1) {
+			return super.mouseClicked(mouseX, mouseY, button);
+		}
+		if (button == 0 && searchFocused) {
+			return true;
+		}
 
-		for (int i = 0; i < tabs.size(); i++) {
-			int ty = 60 + i * 22;
+		if (button == 0) {
+			List<Category> categories = categories();
+			for (int i = 0; i < categories.size(); i++) {
+				int y = 106 + i * 34;
+				if (hovered(12, y, SIDEBAR_W - 7, y + 28, mx, my)) {
+					category = categories.get(i);
+					scroll = 0;
+					settingsOpen = false;
+					return true;
+				}
+			}
 
-			if (hovered(sx, ty, sx + sw, ty + 19, mx, my)) {
-				category = tabs.get(i);
-				scroll = 0;
+			int themeX = PANEL_W - 164;
+			if (hovered(themeX, 13, PANEL_W - 12, 39, mx, my)) {
+				InterfaceModule ui = mod.getModuleManager().get(InterfaceModule.class);
+				if (ui != null) {
+					ui.getTheme().cycle(1);
+					mod.saveConfig();
+				}
+				return true;
+			}
+
+			int hudY = PANEL_H - 42;
+			if (hovered(12, hudY, SIDEBAR_W - 7, hudY + 28, mx, my)) {
+				mod.saveConfig();
+				mod.openHudEditor();
 				return true;
 			}
 		}
 
-		int buttonY = PANEL_H - 32;
-
-		if (hovered(sx, buttonY, sx + sw, buttonY + 18, mx, my)) {
-			mod.saveConfig();
-			mod.openHudEditor();
-			return true;
-		}
-
-		int x = SIDEBAR_W + 12;
 		List<Module> modules = visibleModules();
-
 		for (int i = 0; i < modules.size(); i++) {
-			int ry = CONTENT_Y + 4 + i * ROW_H - scroll;
-
-			if (ry < CONTENT_Y || ry + ROW_H - 4 > CONTENT_Y + CONTENT_H) {
+			int y = LIST_TOP + i * ROW_STEP - scroll;
+			int rowTop = Math.max(y, LIST_TOP);
+			int rowBottom = Math.min(y + ROW_H - 3, LIST_BOTTOM);
+			if (rowBottom <= rowTop) {
 				continue;
 			}
 
-			if (hovered(x, ry, x + LIST_W, ry + ROW_H - 4, mx, my)) {
+			if (hovered(LIST_X + 9, rowTop, LIST_X + LIST_W - 9, rowBottom, mx, my)) {
 				Module module = modules.get(i);
 				selected = module;
-				module.toggle();
-				ripples.add(new Ripple(mx, my));
+				if (button == 1) {
+					settingsOpen = true;
+				} else {
+					settingsOpen = false;
+					module.toggle();
+					ripples.add(new Ripple(mx, my));
+				}
 				return true;
 			}
 		}
 
 		for (Hit hit : hits) {
-			if (hovered(hit.x1, hit.y1, hit.x2, hit.y2, mx, my)) {
-				applyHit(hit, mx);
-				ripples.add(new Ripple(mx, my));
+			if (!hovered(hit.x1, hit.y1, hit.x2, hit.y2, mx, my)) {
+				continue;
+			}
+
+			if (hit.type == 6 && hit.target instanceof Module module) {
+				if (button == 1) {
+					selected = module;
+					settingsOpen = true;
+				} else {
+					module.toggle();
+					mod.saveConfig();
+				}
 				return true;
 			}
+
+			if (button == 1) {
+				return true;
+			}
+
+			applyHit(hit, mx);
+			ripples.add(new Ripple(mx, my));
+			return true;
+		}
+
+		if (settingsOpen && button == 0 && hovered(DETAIL_X + DETAIL_W - 25, 58,
+				DETAIL_X + DETAIL_W - 10, 79, mx, my)) {
+			settingsOpen = false;
+			return true;
 		}
 
 		return super.mouseClicked(mouseX, mouseY, button);
 	}
 
 	private void applyHit(Hit hit, float mouseX) {
-		if (hit.type == 1 && hit.setting instanceof BoolSetting bool) {
+		if (hit.type == 5 && hit.target instanceof Module module) {
+			awaitingBind = module;
+			return;
+		}
+
+		if (hit.target instanceof BoolSetting bool) {
 			bool.toggle();
 			mod.saveConfig();
-		} else if (hit.type == 2 && hit.setting instanceof NumberSetting number) {
-			dragging = true;
-			dragSetting = number;
-			number.setProgress((mouseX - hit.x1) / (double) Math.max(1, hit.x2 - hit.x1));
+		} else if (hit.target instanceof NumberSetting number && hit.type == 2) {
+			dragHit = hit;
+			updateNumber(number, hit, mouseX);
+		} else if (hit.target instanceof ChoiceSetting choice) {
+			choice.cycle(mouseX < (hit.x1 + hit.x2) / 2.0f ? -1 : 1);
 			mod.saveConfig();
-		} else if (hit.type == 3 && hit.setting instanceof ChoiceSetting choice) {
-			choice.cycle(1);
-			mod.saveConfig();
-		} else if (hit.type == 4 && hit.setting instanceof ColorSetting color) {
-			dragging = true;
-			color.setHue((float) ((mouseX - hit.x1) / (double) Math.max(1, hit.x2 - hit.x1) * 360.0));
-			mod.saveConfig();
+		} else if (hit.target instanceof ColorSetting color && hit.type == 4) {
+			dragHit = hit;
+			updateColor(color, hit, mouseX);
 		}
+	}
+
+	private void updateNumber(NumberSetting setting, Hit hit, float mouseX) {
+		setting.setProgress((mouseX - hit.x1) / (double) Math.max(1, hit.x2 - hit.x1));
+	}
+
+	private void updateColor(ColorSetting setting, Hit hit, float mouseX) {
+		setting.setHue((float) ((mouseX - hit.x1) / (double) Math.max(1, hit.x2 - hit.x1) * 360.0));
 	}
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-		if (dragging && dragSetting != null) {
-			for (Hit hit : hits) {
-				if (hit.setting == dragSetting && hit.type == 2) {
-					dragSetting.setProgress((uiX(mouseX) - hit.x1) / (double) Math.max(1, hit.x2 - hit.x1));
-					mod.saveConfig();
-					break;
-				}
+		if (dragHit != null && button == 0) {
+			float mx = uiX(mouseX);
+			if (dragHit.target instanceof NumberSetting number) {
+				updateNumber(number, dragHit, mx);
+			} else if (dragHit.target instanceof ColorSetting color) {
+				updateColor(color, dragHit, mx);
 			}
-
 			return true;
 		}
 
@@ -518,8 +711,11 @@ public class NevvaScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-		dragging = false;
-		dragSetting = null;
+		if (dragHit != null) {
+			dragHit = null;
+			mod.saveConfig();
+			return true;
+		}
 
 		return super.mouseReleased(mouseX, mouseY, button);
 	}
@@ -528,13 +724,10 @@ public class NevvaScreen extends Screen {
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
 		float mx = uiX(mouseX);
 		float my = uiY(mouseY);
-		int x = SIDEBAR_W + 12;
-
-		if (hovered(x, CONTENT_Y, x + LIST_W, CONTENT_Y + CONTENT_H, mx, my)) {
+		if (hovered(LIST_X, LIST_TOP, LIST_X + LIST_W, LIST_BOTTOM, mx, my)) {
 			List<Module> modules = visibleModules();
-			int maxScroll = Math.max(0, modules.size() * ROW_H - CONTENT_H);
-			scroll = (int) MathHelper.clamp(scroll - verticalAmount * 16.0, 0, maxScroll);
-
+			int maxScroll = Math.max(0, modules.size() * ROW_STEP - (LIST_BOTTOM - LIST_TOP));
+			scroll = (int) MathHelper.clamp(scroll - verticalAmount * 18.0, 0, maxScroll);
 			return true;
 		}
 
@@ -547,15 +740,15 @@ public class NevvaScreen extends Screen {
 	}
 
 	private static final class Hit {
-		final Setting<?> setting;
+		final Object target;
 		final int x1;
 		final int y1;
 		final int x2;
 		final int y2;
 		final int type;
 
-		Hit(Setting<?> setting, int x1, int y1, int x2, int y2, int type) {
-			this.setting = setting;
+		Hit(Object target, int x1, int y1, int x2, int y2, int type) {
+			this.target = target;
 			this.x1 = x1;
 			this.y1 = y1;
 			this.x2 = x2;

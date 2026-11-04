@@ -4,8 +4,10 @@ package dev.nevva.visuals.module;
  * Groups modules in the in-game menu.
  */
 public enum Category {
-	HUD("HUD", "hud"),
+	COMBAT("Combat", "combat"),
 	RENDER("Render", "render"),
+	MOVEMENT("Movement", "movement"),
+	HUD("HUD", "hud"),
 	WORLD("World", "world"),
 	CLIENT("Client", "client"),
 	MISC("Misc", "misc");

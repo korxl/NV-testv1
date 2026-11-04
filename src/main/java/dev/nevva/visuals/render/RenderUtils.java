@@ -208,6 +208,19 @@ public final class RenderUtils {
 				circle(context, x + 4.5, y + 4, 3.2, color);
 				circle(context, x + 4.5, y + 4, 1.3, 0xFF000000 | (color & 0xFFFFFF));
 			}
+			case "combat" -> {
+				context.fill(x + 4, y, x + 6, y + 9, color);
+				context.fill(x, y + 3, x + 9, y + 5, color);
+				context.fill(x + 1, y + 1, x + 3, y + 3, color);
+				context.fill(x + 6, y + 1, x + 8, y + 3, color);
+			}
+			case "movement" -> {
+				context.fill(x + 4, y, x + 6, y + 9, color);
+				context.fill(x + 1, y + 2, x + 4, y + 5, color);
+				context.fill(x + 6, y + 2, x + 9, y + 5, color);
+				context.fill(x + 1, y + 5, x + 4, y + 8, color);
+				context.fill(x + 6, y + 5, x + 9, y + 8, color);
+			}
 			default -> {
 				context.fill(x + 1, y + 1, x + 3, y + 3, color);
 				context.fill(x + 6, y + 1, x + 8, y + 3, color);

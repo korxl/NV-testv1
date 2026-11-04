@@ -14,6 +14,7 @@ public abstract class Module {
 	private final Category category;
 	private final List<Setting<?>> settings = new ArrayList<>();
 	private boolean enabled;
+	private int keyCode = -1;
 
 	protected Module(String name, String description, Category category) {
 		this.name = name;
@@ -44,6 +45,14 @@ public abstract class Module {
 
 	public boolean isEnabled() {
 		return enabled;
+	}
+
+	public int getKeyCode() {
+		return keyCode;
+	}
+
+	public void setKeyCode(int keyCode) {
+		this.keyCode = keyCode < 0 ? -1 : keyCode;
 	}
 
 	public void toggle() {

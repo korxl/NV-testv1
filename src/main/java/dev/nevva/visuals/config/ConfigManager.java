@@ -37,6 +37,7 @@ public final class ConfigManager {
 				if (loaded.bools == null) loaded.bools = defaults.bools;
 				if (loaded.numbers == null) loaded.numbers = defaults.numbers;
 				if (loaded.choices == null) loaded.choices = defaults.choices;
+				if (loaded.binds == null) loaded.binds = defaults.binds;
 				config = loaded;
 			}
 		} catch (Exception e) {
