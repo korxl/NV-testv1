@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "nevvavisuals",
+  "version": "${version}",
+  "name": "NevvaVisuals",
+  "description": "Client-side visual mod: custom HUD, animated Target HUD, aspect ratio, custom fog, custom world time and a modern animated menu.",
+  "authors": [
+    "Nevva"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.nevva.visuals.NevvaVisuals"
+    ]
+  },
+  "mixins": [
+    "nevvavisuals.mixins.json"
+  ],
+  "accessWidener": "nevvavisuals.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.4",
+    "java": ">=21",
+    "fabric-api": ">=0.110.0"
+  }
+}
